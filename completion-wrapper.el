@@ -42,7 +42,7 @@
 (ef-prefixied cw completion-wrapper
   (defvar-cw- checkable-completers '((helm (lambda ()
                                              ;; todo: move to `($expand-function package-is-installed)'
-                                             (completion-wrapper--package-is-installed 'helm)))
+                                             (completion-wrapper--package-is-installed-p 'helm)))
                                      (first (lambda ()
                                               t))))
 
@@ -52,6 +52,19 @@
   (defun-cw complete (candidates)
     "Invoke completion engine with CANDIDATES and return completion in the case of the success.
 Otherwise, return nil."
+    ($@- check-candidates-are-valid candidates)
+    (if (eq (length candidates)
+            1)
+        (car candidates)
+      ($@- get-completion-result candidates)))
+
+  (defun-cw- check-candidates-are-valid (candidates)
+    "Raises an error if candidates are not valid."
+    (when (eq (length candidates)
+              0)
+      (error "No candidates was passed in complete function")))
+
+  (defun-cw- get-completion-result (candidates) 
     (let ((completer ($@- get-completer ($? default-completer))))
       (cond
        (($@- is-helm-p completer)
@@ -64,7 +77,6 @@ Otherwise, return nil."
         (error "Invalid completion engine in use")))))
 
   (defun-cw- get-completer (preferred-completer)
-    "Return symbol with name of applyiable completer."
     (let ((completers ($@- find-completers)))
       (if (cl-member preferred-completer
                      completers)
@@ -78,7 +90,7 @@ Otherwise, return nil."
                              (funcall (cadr completer)))
                            ($?- checkable-completers))))
 
-  (defun-cw- package-is-installed (package)
+  (defun-cw- package-is-installed-p (package)
     "Return t if PACKAGE is installed. It loades the package."
     (if (symbolp package)
         (require package nil 'noerror)
@@ -91,10 +103,8 @@ Otherwise, return nil."
 
   (defun-cw- complete-helm (candidates)
     "Get user choice using helm."
-    (if ($@- package-is-installed 'helm)
-        (helm (helm-build-sync-source "test"
-                :candidates candidates))
-      (error "helm is not installed")))
+    (helm (helm-build-sync-source "test"
+            :candidates candidates)))
 
   (defun-cw- is-first-p (completer)
     (equal completer
