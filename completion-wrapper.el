@@ -40,48 +40,47 @@
 (ef-prefixied cw completion-wrapper
   (defconst-cw- checkable-completers '(helm))
 
+
+  (defvar-cw default-completer 'helm
+    "Default completer that will be used in functions defined below.")
+
+  (defun-cw complete (candidates)
+    "Invoke completion engine with CANDIDATES and return completion in the case of the success.
+Otherwise, return nil."
+    (let ((completer ($@- get-completer ($? default-completer))))
+      (cond
+       (($@- is-helm-p completer)
+        ($@- complete-helm candidates))
+
+       (t
+        (error "Invalid completion engine in use")))))
+
+  (defun-cw- get-completer (&optional preferred-completer)
+    (let ((completers ($@- find-completers)))
+      (cond
+       (($@- package-is-installed preferred-completer)
+        preferred-completer)
+
+       ((> (length ($? completers))
+           0)
+        (car ($? completers)))
+
+       (t (error "No completers available")))))
+
+  (defun-cw- find-completers ()
+    "Return list of available completers"
+    (seq-filter #'completion-wrapper--package-is-installed
+                ($?- checkable-completers)))
+
   (defun-cw- package-is-installed (package)
     "Return t if PACKAGE is installed. It loades the package."
     (if (symbolp package)
         (require package nil 'noerror)
       nil))
 
-  (defun-cw- find-completers ()
-    "Return list of available completers"
-    (seq-filter (lambda (item)
-                  ($@- package-is-installed item))
-                ($?- checkable-completers)))
-
-  (defconst-cw completers ($@- find-completers)
-    "Available completion engines.")
-
-  (defun-cw- get-completer (&optional preferred-completer)
-    (cond
-     (($@- package-is-installed preferred-completer)
-      preferred-completer)
-
-     ((> (length ($? completers))
-         0)
-      (car ($? completers)))
-
-     (t (error "No completers available"))))
-
-  (defvar-cw default-completer ($@- get-completer 'helm)
-    "Default completer that will be used in functions defined below.")
-
-  (defun-cw complete (candidates)
-    "Invoke completion engine with CANDIDATES and return completion in the case of the success.
-Otherwise, return nil."
-    (cond
-     (($@- default-is-helm-p)
-      ($@- complete-helm candidates))
-
-     (t
-      (error "Invalid completion engine in use"))))
-
-  (defun-cw- default-is-helm-p ()
-    "Return t if selected completed is p"
-    (equal ($? default-completer)
+  (defun-cw- is-helm-p (completer)
+    "Return t if selected completer is helm"
+    (equal completer
            'helm))
 
   (defun-cw- complete-helm (candidates)
