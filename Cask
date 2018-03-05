@@ -9,3 +9,6 @@
 
 (depends-on "emacs-ef"
             :git "https://github.com/shinkiley/emacs-ef")
+            
+(development
+  (depends-on "buttercup"))

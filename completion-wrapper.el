@@ -40,14 +40,20 @@
 (require 'emacs-ef)
 
 (ef-prefixied cw completion-wrapper
-  (defvar-cw- checkable-completers '((helm (lambda ()
-                                             ;; todo: move to `($expand-function package-is-installed)'
-                                             (completion-wrapper--package-is-installed-p 'helm)))
-                                     (first (lambda ()
-                                              t))))
+  (defvar-cw- checkable-completers ()
+    "Completer definitions, that consist of (name predicate completion-function).
+NAME is the name of completer.
+PREDICATE is function, that if it returns nil, this completer won't be used.
+COMPLETION-FUNCTION is actual function that makes completion.
+It must take one argument that is completion candidates.")
 
   (defvar-cw default-completer 'helm
     "Default completer that will be used in functions defined below.")
+
+  (defun-cw- define-completer (name predicate completion-function)
+    ($!- checkable-completers
+         (cons `(,name ,predicate ,completion-function)
+               ($?- checkable-completers))))
 
   (defun-cw complete (candidates)
     "Invoke completion engine with CANDIDATES and return completion in the case of the success.
@@ -65,30 +71,25 @@ Otherwise, return nil."
       (error "No candidates was passed in complete function")))
 
   (defun-cw- get-completion-result (candidates) 
-    (let ((completer ($@- get-completer ($? default-completer))))
-      (cond
-       (($@- is-helm-p completer)
-        ($@- complete-helm candidates))
-
-       (($@- is-first-p completer)
-        ($@- complete-first candidates))
-
-       (t
-        (error "Invalid completion engine in use")))))
+    (let* ((completer ($@- get-completer ($? default-completer)))
+           (completion-function (nth 2 completer)))
+      (if (functionp completion-function)
+          (funcall completion-function candidates)
+        (error "Can't get completion function"))))
 
   (defun-cw- get-completer (preferred-completer)
+    "Return appopriate completer.
+If PREFERRED-COMPLETER is available, return it.
+Otherwise, return another."
     (let ((completers ($@- find-completers)))
-      (if (cl-member preferred-completer
-                     completers)
-          preferred-completer
-        (car completers))))
+      (or (assoc preferred-completer completers)
+          (car completers))))
 
   (defun-cw- find-completers ()
-    "Return list of available completers"
-    (cl-mapcar #'car
-               (seq-filter (lambda (completer)
-                             (funcall (cadr completer)))
-                           ($?- checkable-completers))))
+    "Return list of available completers."
+    (seq-filter (lambda (completer)
+                  (funcall (nth 1 completer)))
+                ($?- checkable-completers)))
 
   (defun-cw- package-is-installed-p (package)
     "Return t if PACKAGE is installed. It loades the package."
@@ -96,25 +97,26 @@ Otherwise, return nil."
         (require package nil 'noerror)
       nil))
 
-  (defun-cw- is-helm-p (completer)
-    "Return t if selected completer is helm"
-    (equal completer
-           'helm))
-
   (defun-cw- complete-helm (candidates)
     "Get user choice using helm."
-    (helm (helm-build-sync-source "test"
-            :candidates candidates)))
-
-  (defun-cw- is-first-p (completer)
-    (equal completer
-           'first))
+    )
 
   (defun-cw- complete-first (candidates)
     (if (> (length candidates)
            0)
         (car candidates)
       (error "No candidates for completion")))
+
+  ($@- define-completer 'helm
+       (lambda ()
+         (completion-wrapper--package-is-installed-p 'helm))
+       (lambda (candidates)
+         (helm (helm-build-sync-source "test"
+                 :candidates candidates))))
+
+  ($@- define-completer 'first
+       (lambda () t)
+       #'car)
   )
 
 (provide 'completion-wrapper)
