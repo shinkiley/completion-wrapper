@@ -1,4 +1,4 @@
-;;; completion-wrapper.el --- 
+;;; completion-wrapper.el ---
 ;;
 ;; Author:  <shinki@yui-pc>
 ;; Version: 0.1
@@ -34,12 +34,17 @@
 ;;
 ;;; Code:
 
+(require 'seq)
 (require 'cl-lib)
+
 (require 'emacs-ef)
 
 (ef-prefixied cw completion-wrapper
-  (defconst-cw- checkable-completers '(helm))
-
+  (defvar-cw- checkable-completers '((helm (lambda ()
+                                             ;; todo: move to `($expand-function package-is-installed)'
+                                             (completion-wrapper--package-is-installed 'helm)))
+                                     (first (lambda ()
+                                              t))))
 
   (defvar-cw default-completer 'helm
     "Default completer that will be used in functions defined below.")
@@ -52,25 +57,26 @@ Otherwise, return nil."
        (($@- is-helm-p completer)
         ($@- complete-helm candidates))
 
+       (($@- is-first-p completer)
+        ($@- complete-first candidates))
+
        (t
         (error "Invalid completion engine in use")))))
 
-  (defun-cw- get-completer (&optional preferred-completer)
+  (defun-cw- get-completer (preferred-completer)
+    "Return symbol with name of applyiable completer."
     (let ((completers ($@- find-completers)))
-      (cond
-       (($@- package-is-installed preferred-completer)
-        preferred-completer)
-
-       ((> (length ($? completers))
-           0)
-        (car ($? completers)))
-
-       (t (error "No completers available")))))
+      (if (cl-member preferred-completer
+                     completers)
+          preferred-completer
+        (car completers))))
 
   (defun-cw- find-completers ()
     "Return list of available completers"
-    (seq-filter #'completion-wrapper--package-is-installed
-                ($?- checkable-completers)))
+    (cl-mapcar #'car
+               (seq-filter (lambda (completer)
+                             (funcall (cadr completer)))
+                           ($?- checkable-completers))))
 
   (defun-cw- package-is-installed (package)
     "Return t if PACKAGE is installed. It loades the package."
@@ -89,6 +95,16 @@ Otherwise, return nil."
         (helm (helm-build-sync-source "test"
                 :candidates candidates))
       (error "helm is not installed")))
+
+  (defun-cw- is-first-p (completer)
+    (equal completer
+           'first))
+
+  (defun-cw- complete-first (candidates)
+    (if (> (length candidates)
+           0)
+        (car candidates)
+      (error "No candidates for completion")))
   )
 
 (provide 'completion-wrapper)
